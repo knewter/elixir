@@ -147,7 +147,7 @@ defmodule Mix.Tasks.Deps.Compile do
 
   defp do_compile(%Mix.Dep{app: app, opts: opts} = dep) do
     if command = opts[:compile] do
-      Mix.shell.info("#{app}: #{command}")
+      Mix.shell.info("==> #{app} (#{command})")
       do_command(dep, command)
     else
       false
