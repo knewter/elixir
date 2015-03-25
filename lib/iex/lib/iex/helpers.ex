@@ -23,6 +23,7 @@ defmodule IEx.Helpers do
     * `ls/1`          — lists the contents of the specified directory
     * `pwd/0`         — prints the current working directory
     * `r/1`           — recompiles and reloads the given module's source file
+    * `regs/0`        — information about registered processes
     * `respawn/0`     — respawns the current shell
     * `s/1`           — prints spec information
     * `t/1`           — prints type information
@@ -608,6 +609,90 @@ defmodule IEx.Helpers do
       _ ->
         representation
     end
+  end
+
+  @doc """
+  Prints information about registered processes
+  """
+  def regs do
+    print_node_regs({node, :erlang.registered})
+  end
+
+  defp print_node_regs({n, list}) when is_list(list) do
+    {pids, ports, _dead} = pids_and_ports(n, :lists.sort(list), [], [], [])
+    # print process info
+    procs_head = :io_lib.format("~n** Registered procs on node ~w **~n",[n])
+    IO.ANSI.format([:bright, :yellow] ++ procs_head)
+    |> IO.puts
+
+    procformat("Name", "Pid", "Initial Call", "Reds", "Msgs", [:bright, :yellow])
+    :lists.foreach(fn({name, pi, pid}) -> procline(name, pi, pid) end, pids)
+    # print port info
+    ports_head = :io_lib.format("~n** Registered ports on node ~w **~n",[n])
+    IO.ANSI.format([:bright, :yellow] ++ ports_head)
+    |> IO.puts
+
+    portformat("Name", "Id", "Command", [:bright, :yellow])
+    :lists.foreach(fn({name,pi,id}) -> portline(name, pi, id) end, ports)
+  end
+
+  defp pids_and_ports(_, [], pids, ports, dead) do
+    {Enum.reverse(pids), Enum.reverse(ports), Enum.reverse(dead)}
+  end
+  defp pids_and_ports(node, [name|names], pids, ports, dead) do
+    case pwhereis(node, name) do
+      pid when is_pid(pid) ->
+        pids_and_ports(node, names, [{name, pinfo(pid), pid}|pids], ports, dead)
+      id when is_port(id) ->
+        pids_and_ports(node, names, pids, [{name, portinfo(id), id}|ports], dead)
+      :undefined ->
+        pids_and_ports(node, names, pids, ports, [name|dead])
+    end
+  end
+
+  defp pwhereis(node, name) do
+    case :erlang.is_alive() do
+      true -> :rpc.call(node, Process, :whereis, [name])
+      false -> Process.whereis(name)
+    end
+  end
+
+  defp portinfo(id) do
+    case :erlang.is_alive() do
+      true ->  [ :rpc.call(node(id), :erlang, :port_info, [id,:name]) ];
+      false -> [ :erlang.port_info(id, :name) ]
+    end
+  end
+
+  defp procformat(name, pid, call, reds, lm, ansi_options \\ []) when is_list(ansi_options) do
+    formatted = :io_lib.format("~-21s ~-12s ~-25s ~12s ~4s~n", [name, pid, call, reds, lm])
+
+    IO.ANSI.format(ansi_options ++ formatted)
+    |> IO.puts
+  end
+
+  defp procline(name, info, pid) do
+    call = initial_call(info)
+    reds  = fetch(:reductions, info)
+    lm = length(fetch(:messages, info))
+    procformat(:io_lib.format("~w",[name]),
+	       inspect(pid),
+	       :io_lib.format("~s",[mfa_string(call)]),
+	       :erlang.integer_to_list(reds), :erlang.integer_to_list(lm))
+  end
+
+  defp portformat(name, id, cmd, ansi_options \\ []) when is_list(ansi_options) do
+    formatted = :io_lib.format("~-21s ~-15s ~-40s~n", [name, id, cmd])
+
+    IO.ANSI.format(ansi_options ++ formatted)
+    |> IO.puts
+  end
+
+  defp portline(name, info, id) do
+    cmd = fetch(:name, info)
+    portformat(:io_lib.format("~w",[name]),
+	       :erlang.port_to_list(id),
+	       cmd)
   end
 
   @doc """
