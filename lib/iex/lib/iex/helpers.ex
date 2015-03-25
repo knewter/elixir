@@ -21,6 +21,7 @@ defmodule IEx.Helpers do
     * `l/1`           — loads the given module's beam code
     * `ls/0`          — lists the contents of the current directory
     * `ls/1`          — lists the contents of the specified directory
+    * `pid/3`         — convert x, y, z to a pid
     * `pwd/0`         — prints the current working directory
     * `r/1`           — recompiles and reloads the given module's source file
     * `regs/0`        — information about registered processes
@@ -533,6 +534,13 @@ defmodule IEx.Helpers do
   """
   def pwd do
     IO.puts IEx.color(:eval_info, System.cwd!)
+  end
+
+  @doc """
+  Converts x, y, z into a pid
+  """
+  def pid(x, y, z) do
+    :c.pid(x, y, z)
   end
 
   @doc """
